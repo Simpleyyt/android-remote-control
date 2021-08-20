@@ -3,5 +3,7 @@ adbutils>=0.8.1,<1.0
 tornado
 requests
 apkutils2
-uiautomator2>=2.5.9
 humanize
+six
+bunch
+rethinkdb==2.4.2.post1
