@@ -5,7 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>设备远程控制</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/images/favicon-16x16.png">
+    <meta name="msapplication-TileColor" content="#f69435">
+    <meta name="theme-color" content="#f69435">
+    <title>云手机</title>
     <link rel="stylesheet" href="/static/vendor/fontawesome-5.7.2/css/all.css">
     <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.2.1/dist/css/bootstrap.min.css">
@@ -25,6 +33,13 @@
         #content-wrapper {
             height: 100%;
             /* overflow: hidden; */
+        }
+
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden
         }
 
         #content-wrapper {
@@ -49,6 +64,15 @@
 
         .height-auto-fill {
             height: -webkit-fill-available;
+        }
+
+        @media (max-width: 420px) {
+
+            .height-auto-fill,
+            .debugarea,
+            .navbar {
+                display: none;
+            }
         }
 
         .grow-0 {
@@ -77,7 +101,7 @@
 
         .debugarea {
             /* background-color: #ddd; */
-            border: 1px solid red;
+            border: 1px solid lightgray;
         }
 
         .screen {
@@ -122,14 +146,10 @@
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark" style="height: 55px;">
             <div class="container-fluid">
                 <a class="navbar-brand" href="/">
-                    <span class="title">ATXServer2</span></a>
+                    <span class="title">云手机</span></a>
                 </a>
                 <div class="collapse navbar-collapse" id="navbarNavDropdown">
                 </div>
-                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown"
-                    aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
             </div>
         </nav>
 
@@ -175,6 +195,8 @@
                             <button class="btn btn-default grow-1" @click="runKeyevent('APP_SWITCH')">
                                 <i class="fas fa-window-restore"></i>
                             </button>
+                            <button class="btn btn-default grow-1" @click="runKeyevent('POWER')">
+                                <i class="fas fa-power-off"></i></button>
                             <button class="btn btn-default grow-1" @click="runKeyevent('MENU')">
                                 <i class="fas fa-bars"></i></button>
                             <button class="btn btn-default grow-1" @click="runKeyevent('HOME')">
@@ -251,8 +273,8 @@
                                             <span v-for="v in userSettings.shortcuts" style="margin-right: 5px">
                                                 <el-button round size="small" :title="v.command"
                                                     @click.exact="triggerShortcut(v)"
-                                                    @click.alt.exact="removeShortcut(v)"><i
-                                                    class="fas fa-link"></i></el-button>
+                                                    @click.alt.exact="removeShortcut(v)"><i class="fas fa-link"></i>
+                                                </el-button>
                                             </span>
                                             <el-popover placement="right" width="400" trigger="click"
                                                 v-model="userSettings.visible">
@@ -438,6 +460,21 @@
     <script
         src="/static/javascripts/imagepool.js?v=d7a93c0c909a2603bacd016f66ffa0631b6bf899c8269cab41efa0cb858c573ded1474781028810640bb232429adac1c3db4c80f6b9cc0d6ba7f2026e9e1d2ed"></script>
     <script>
+        document.body.addEventListener('touchmove', function(event) {
+            event.preventDefault();
+        }, {
+            passive: false,
+            useCapture: false
+        });
+
+        window.onresize = function() {
+            $(document.body).width(window.innerWidth).height(window.innerHeight);
+        }
+
+        $(function() {
+            window.onresize();
+        });
+    
         vm = new Vue({
             el: "#content-wrapper",
             data: {
@@ -921,6 +958,7 @@
                             this.websockets.touchpad = null;
                         }
                         element.removeEventListener('mousedown', mouseDownListener);
+                        element.removeEventListener('touchstart', touchStartListener);
                         element.removeEventListener('mousewheel', mouseWheelListener);
                     }
                     function calculateBounds() {
@@ -1078,7 +1116,9 @@
                         touchCommit();
                         // element.removeEventListener('mousemove', mouseHoverListener);
                         element.addEventListener('mousemove', mouseMoveListener);
+                        element.addEventListener('touchmove', touchMoveListener)
                         document.addEventListener('mouseup', mouseUpListener);
+                        document.addEventListener('touchend', touchEndListener);
                     }
                     let mouseMoveListener = (event) => {
                         var e = event
@@ -1098,6 +1138,7 @@
                         touchCommit();
                     }
                     function mouseUpListener(event) {
+                        console.log("up")
                         var e = event
                         if (e.originalEvent) {
                             e = e.originalEvent
@@ -1113,8 +1154,10 @@
                     }
                     function stopMousing() {
                         element.removeEventListener('mousemove', mouseMoveListener);
+                        element.removeEventListener('touchmove', touchMoveListener)
                         // element.addEventListener('mousemove', mouseHoverListener);
                         document.removeEventListener('mouseup', mouseUpListener);
+                        document.removeEventListener('touchend', touchEndListener);
                         deactiveFinger(0);
                     }
                     function activeFinger(index, x, y, pressure) {
@@ -1172,9 +1215,39 @@
                             wheel.count = 0;
                         }, 100)
                     }
+                    function getTouchPos(canvasDom, touchEvent) {
+                        var rect = canvasDom.getBoundingClientRect();
+                        return {
+                            x: touchEvent.touches[0].clientX - rect.left,
+                            y: touchEvent.touches[0].clientY - rect.top
+                        };
+                    }
+                    function touchStartListener(event) {
+                        mousePos = getTouchPos(element, event);
+                        var touch = event.touches[0];
+                        var mouseEvent = new MouseEvent("mousedown", {
+                            clientX: touch.clientX,
+                            clientY: touch.clientY
+                        });
+                        element.dispatchEvent(mouseEvent);
+                    }
+                    function touchEndListener(event) {
+                        var mouseEvent = new MouseEvent("mouseup", {});
+                        document.dispatchEvent(mouseEvent);
+                    }
+                    function touchMoveListener(event) {
+                        var touch = event.touches[0];
+                        var mouseEvent = new MouseEvent("mousemove", {
+                            clientX: touch.clientX,
+                            clientY: touch.clientY
+                        });
+                        element.dispatchEvent(mouseEvent);
+
+                    }
                     /* bind listeners */
                     element.addEventListener('mousedown', mouseDownListener);
                     element.addEventListener('mousewheel', mouseWheelListener);
+                    element.addEventListener("touchstart", touchStartListener, false);
                     // element.addEventListener('mousemove', mouseHoverListener);
                 },
                 closeSyncTouchpad() {
@@ -1237,7 +1310,7 @@
                     img.src = url;
                     return dtd;
                 },
-                closeWindowWhenReleased(interval) {},
+                closeWindowWhenReleased(interval) { },
                 initClipboardJS() {
                     var clipboard = new ClipboardJS(".clipboard-copy")
                     clipboard.on('success', function (e) {
